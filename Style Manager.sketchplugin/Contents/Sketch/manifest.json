@@ -1,0 +1,73 @@
+{
+	"name" : "Style Manager",
+	"description" : "A collection of tools that help with text and layer style management",
+	"author" : "Nefaur Khandker",
+	"authorEmail" : "nefaurk@gmail.com",
+	"homepage": "http://github.com/nefaurk/style-manager",
+	"version" : "0.1",
+	"identifier" : "com.nefaurk.sketch-plugins.styleManager",
+	"compatibleVersion": "48.2",
+	"commands" : [
+		{
+			"script" : "script.cocoascript",
+			"handler" : "inspectStyle",
+			"name" : "Inspect Style",
+			"identifier" : "inspectStyle",
+			"shortcut" : "ctrl i",
+		},
+		{
+			"script" : "script.cocoascript",
+			"handler" : "selectLayersWithSameAttributes",
+			"name" : "[P2] Select Layers With Same Attributes",
+			"identifier" : "selectLayersWithSameAttributes",
+		},
+		{
+			"script" : "script.cocoascript",
+			"handler" : "updateStyle",
+			"name" : "Update Style to Match Selected Layer and Preserve Overrides",
+			"identifier" : "updateStyle",
+		},
+		{
+			"script" : "script.cocoascript",
+			"handler" : "selectLayersWithStyle",
+			"name" : "[P2] Select Layers With Style",
+			"identifier" : "selectLayersWithStyle",
+		},
+		{
+			"script" : "script.cocoascript",
+			"handler" : "replaceStyle",
+			"name" : "[P1] Replace Style",
+			"identifier" : "replaceStyle",
+		},
+		{
+			"script" : "script.cocoascript",
+			"handler" : "mergeDuplicateStyles",
+			"name" : "[P2] Merge Duplicate Styles",
+			"identifier" : "mergeDuplicateStyles",
+		},
+		{
+			"script" : "script.cocoascript",
+			"handler" : "importStyles",
+			"name" : "[P1] Import Styles...",
+			"identifier" : "importStyles",
+		},
+		{
+			"script" : "script.cocoascript",
+			"handler" : "exportStyles",
+			"name" : "[P2] Export Styles...",
+			"identifier" : "exportStyles",
+		},
+	],
+	"menu": {
+		"items": [
+			"inspectStyle",
+			"updateStyle",
+			"selectLayersWithSameAttributes",
+			"selectLayersWithStyle",
+			"replaceStyle",
+			"mergeDuplicateStyles",
+			"importStyles",
+			"exportStyles",
+		]
+	}
+}

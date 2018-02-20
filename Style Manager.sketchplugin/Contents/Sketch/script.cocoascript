@@ -1,0 +1,403 @@
+const LayerType = {
+	Page: "MSPage",
+	Artboard: "MSArtboardGroup",
+	Group: "MSLayerGroup",
+	ShapeGroup: "MSShapeGroup",
+	ShapePath: "MSShapePathLayer",
+	Text: "MSTextLayer",
+};
+
+
+// Helper functions:
+
+var filteredLayersInDocument = function(doc, predicate, filterFunction) {
+	var filteredLayers = NSMutableArray.alloc().init();
+	
+	var pages = doc.pages;
+	for (var i = 0; i < pages.length; i++) {
+		var page = pages[i];
+		filteredLayers.addObjectsFromArray(filteredLayersOnPage(page, predicate, filterFunction));
+	}
+	
+	return filteredLayers;
+}
+
+var filteredLayersOnPage = function(page, predicate, filterFunction) {
+	var scope = page.sketchObject.children();
+	var layers = scope.filteredArrayUsingPredicate(predicate);
+	
+	var filteredLayers = layers.allObjects();
+	
+	if (filterFunction != null) {
+		var filteredLayers = NSMutableArray.alloc().init();
+		var layerLoop = layers.objectEnumerator(), layer;
+		while (layer = layerLoop.nextObject()) {
+			if (filterFunction(layer)) {
+				filteredLayers.push(layer);
+			}
+		}
+	}
+	
+	return filteredLayers;
+}
+
+var getAllSharedTextStyles = function(doc) {
+  var textStyles = doc.sketchObject.documentData().layerTextStyles();
+	
+	var sharedStyles = [];
+	var numStyles = textStyles.numberOfSharedStyles();
+	for (var i = 0; i < numStyles; i++) {
+		var sharedStyle = textStyles.sharedStyleAtIndex(i);
+		sharedStyles.push(sharedStyle);
+	}
+	
+	return sharedStyles;
+};
+
+// Find other text layers with the same text style and update them to match this layer's attributes, preserving overrides
+var updateTextStyleUsingTextLayerAttributes = function(doc, textLayer) {
+	var textStyles = doc.sketchObject.documentData().layerTextStyles();
+	var newStyle = textLayer.style();
+	var textStyleID = newStyle.sharedObjectID();
+	var sharedStyle = textStyles.sharedObjectWithID(textStyleID);
+	
+	var textStyleID = textLayer.style().sharedObjectID();
+	var predicate = NSPredicate.predicateWithFormat("(style.sharedObjectID == %@)", textStyleID);
+	var filteredLayers = filteredLayersInDocument(doc, predicate, function(layer) {
+		return (layer != textLayer);
+	});
+	
+	for (var i = 0; i < filteredLayers.length; i++) {
+		var layerToUpdate = filteredLayers[i];
+		var style = layerToUpdate.style();
+		var attributes = style.textStyle().attributes();
+		var sharedAttributes = sharedStyle.style().textStyle().attributes();
+		var newAttributes = newStyle.textStyle().attributes();
+
+		// Determine which attributes should be updated (and which ones should be preserved)
+		var replacementAttributes = NSMutableDictionary.alloc().init();
+		var hasOverrides = false;
+		for (var key in sharedAttributes) {
+			var value = attributes[key];
+			var sharedValue = sharedAttributes[key];
+			var newValue = newAttributes[key];
+			var replacementValue = null;
+			
+			if (!value.isEqualTo(sharedValue)) {
+				// Preserve overrides
+				hasOverrides = true;
+				replacementValue = value;
+			} else {
+				replacementValue = newValue;
+			}
+			replacementAttributes[key] = replacementValue;
+		}
+		
+		if (hasOverrides) {
+			layerToUpdate.style().textStyle().setAttributes(replacementAttributes);
+		} else {
+			layerToUpdate.style().setTextStyle(newStyle.textStyle());
+		}
+	}
+	
+	// Update the shared text style to match this layer's attributes
+	textStyles.updateValueOfSharedObject_byCopyingInstance(sharedStyle, newStyle);
+};
+
+var showReplaceStyleDialog = function(doc, textStyles) {
+	var viewWidth = 300;
+	var viewHeight = 54;
+	var controlHeight = 22;
+	var verticalSpacing = 10;
+	var horizontalSpacing = 10;
+	
+	var dialog = COSAlertWindow.new();
+	dialog.setMessageText("Select the style and replacement style");
+	dialog.addButtonWithTitle("Replace");
+	dialog.addButtonWithTitle("Cancel");
+
+	var view = NSView.alloc().initWithFrame(NSMakeRect(0, 0, viewWidth, viewHeight));
+	dialog.addAccessoryView(view);
+	
+	var y = 0;
+	var labelWidth = 64;
+	var dropdownWidth = viewWidth - labelWidth - horizontalSpacing;
+	
+	var replaceLabel = NSTextField.alloc().initWithFrame(NSMakeRect(0, y, labelWidth, controlHeight));
+	replaceLabel.setBezeled(false);
+	replaceLabel.setDrawsBackground(false);
+	replaceLabel.setEditable(false);
+	replaceLabel.setSelectable(false);
+	replaceLabel.setStringValue("Replace: ");
+	
+	var replaceDropdown = NSPopUpButton.alloc().initWithFrame(NSMakeRect(labelWidth + horizontalSpacing, y, dropdownWidth, controlHeight));
+	for (var textStyle of textStyles) {
+		var textStyleDescription = textStyle.name();
+		replaceDropdown.addItemWithTitle(textStyleDescription);
+	}
+	
+	y += controlHeight + verticalSpacing;
+ 
+	var findLabel = NSTextField.alloc().initWithFrame(NSMakeRect(0, y, labelWidth, controlHeight));
+	findLabel.setBezeled(false);
+	findLabel.setDrawsBackground(false);
+	findLabel.setEditable(false);
+	findLabel.setSelectable(false);
+	findLabel.setStringValue("Find: ");
+	
+	var findDropdown = NSPopUpButton.alloc().initWithFrame(NSMakeRect(labelWidth + horizontalSpacing, y, dropdownWidth, controlHeight));
+	for (var textStyle of textStyles) {
+		var textStyleDescription = textStyle.name();
+		findDropdown.addItemWithTitle(textStyleDescription);
+	}
+
+	view.addSubview(findLabel);
+	view.addSubview(findDropdown);
+	view.addSubview(replaceLabel);
+	view.addSubview(replaceDropdown);
+	
+	var response = dialog.runModal();
+	if (response == "1000") {
+		var oldStyle = textStyles[findDropdown.indexOfSelectedItem()];
+		var newStyle = textStyles[replaceDropdown.indexOfSelectedItem()];
+		replaceStyleWithStyle(doc, oldStyle, newStyle);
+	}
+};
+
+var replaceStyleWithStyle = function(doc, oldSharedStyle, newSharedStyle) {
+	var oldStyleID = oldSharedStyle.style().sharedObjectID();
+	var predicate = NSPredicate.predicateWithFormat("(style.sharedObjectID == %@)", oldStyleID);
+	var filteredLayers = filteredLayersInDocument(doc, predicate, null);
+	
+	for (var i = 0; i < filteredLayers.length; i++) {
+		var layerToUpdate = filteredLayers[i];
+		var style = layerToUpdate.style();
+		var attributes = style.textStyle().attributes();
+		var sharedAttributes = oldSharedStyle.style().textStyle().attributes();
+		var newAttributes = newSharedStyle.style().textStyle().attributes();
+
+		// Determine which attributes should be updated (and which ones should be preserved)
+		var overrideAttributes = NSMutableDictionary.alloc().init();
+		var hasOverrides = false;
+		for (var key in sharedAttributes) {
+			var value = attributes[key];
+			var sharedValue = sharedAttributes[key];
+			var newValue = newAttributes[key];
+			var overrideValue = null;
+			
+			if (!value.isEqualTo(sharedValue)) {
+				// Preserve overrides
+				hasOverrides = true;
+				overrideValue = value;
+				if (key == "NSFont") {
+					log(value);
+				}
+			} else {
+				overrideValue = newValue;
+			}
+			overrideAttributes[key] = overrideValue;
+		}
+		
+		var newStyle = newSharedStyle.style();
+		var newStyleCopy = newSharedStyle.style().copy();
+		if (hasOverrides) {
+			layerToUpdate.setStyle(newStyleCopy);
+			layerToUpdate.style().textStyle().setAttributes(overrideAttributes);
+		} else {
+			layerToUpdate.setStyle(newStyleCopy);
+		}
+	}
+	
+	var textStyles = doc.sketchObject.documentData().layerTextStyles();
+	textStyles.removeSharedStyle(oldSharedStyle);
+};
+
+// TODO: FINISH THIS
+var textLayersInDocWithStyle = function(doc, styleID) {
+	var pages = doc.pages;
+	for (var page in pages) {
+		log(page);
+	}
+	return null;
+};
+
+
+// Handlers:
+
+var inspectStyle = function(context) {
+	var sketch = context.api();
+	var doc = sketch.selectedDocument;
+  var textStyles = doc.sketchObject.documentData().layerTextStyles();
+	var selectedLayers = doc.selectedLayers;
+	
+	if (selectedLayers.length != 1) {
+		doc.sketchObject.showMessage("You must select exactly one text layer to use this command.");
+	} else {
+		selectedLayers.iterate(function(layer) {
+			if (layer.sketchObject.className() != "MSTextLayer") {
+				doc.sketchObject.showMessage("You must select exactly one text layer to use this command.");
+			} else {
+				var textLayer = layer.sketchObject;
+				var textStyle = textLayer.style();
+				var textStyleID = textStyle.sharedObjectID();
+				var summary = "(No style)";
+				
+				if (textStyleID != null) {
+					var sharedStyle = textStyles.sharedObjectWithID(textStyleID);
+					log(textStyle);
+					log(sharedStyle.style());
+					
+					var predicate = NSPredicate.predicateWithFormat("(style.sharedObjectID == %@)", textStyleID);
+					var filteredLayers = filteredLayersInDocument(doc, predicate, null);
+					var numInstances = filteredLayers.length;
+					
+					var textAttributes = textStyle.textStyle().attributes();
+					var sharedAttributes = sharedStyle.style().textStyle().attributes();
+					
+					var differingAttributes = [];
+					for (var key in sharedAttributes) {
+						var value = textAttributes[key];
+						var sharedValue = sharedAttributes[key];
+						
+						if (!value.isEqualTo(sharedValue)) {
+							differingAttributes.push(key);
+						}
+					}
+					
+					summary = textStyleID + ": " + sharedStyle.name() + " (" + numInstances + " instances)";
+					if (differingAttributes.length > 0) {
+						summary += ". Overrides in this instance: " + differingAttributes.join(", ") + ".";
+					}
+				}
+				
+				doc.sketchObject.showMessage(summary);
+			}
+		});
+	}
+}
+
+var updateStyle = function(context) {
+	var sketch = context.api();
+	var doc = sketch.selectedDocument;
+  var textStyles = doc.sketchObject.documentData().layerTextStyles();
+	var selectedLayers = doc.selectedLayers;
+	
+	if (selectedLayers.length != 1) {
+		doc.sketchObject.showMessage("You must select exactly one text layer to use this command.");
+	} else {
+		selectedLayers.iterate(function(layer) {
+			if (layer.sketchObject.className() != "MSTextLayer") {
+				doc.sketchObject.showMessage("You must select exactly one text layer to use this command.");
+			} else {
+				var textLayer = layer.sketchObject;
+				var textStyleID = textLayer.style().sharedObjectID();
+				if (textStyleID == null) {
+					doc.sketchObject.showMessage("You must select a text layer with a text style to use this command.");
+				} else {
+					var textStyle = textStyles.sharedObjectWithID(textStyleID);
+					var textStyleName = textStyle.name();
+				
+					updateTextStyleUsingTextLayerAttributes(doc, textLayer);
+					doc.sketchObject.showMessage("Updated text style: " + textStyleName);
+				}
+			}
+		});
+	}
+}
+
+var selectLayersWithSameAttributes = function(context) {
+	var sketch = context.api();
+	var doc = sketch.selectedDocument;
+	var selectedLayers = doc.selectedLayers;
+	
+	if (selectedLayers.length != 1) {
+		doc.sketchObject.showMessage("You must select exactly one text layer to use this command.");
+	} else {
+		selectedLayers.iterate(function(selectedLayer) {
+			if (selectedLayer.sketchObject.className() != "MSTextLayer") {
+				doc.sketchObject.showMessage("You must select exactly one text layer to use this command.");
+			} else {
+				var textLayer = selectedLayer.sketchObject;
+				var attributesToFind = textLayer.style().textStyle().attributes();
+				
+				var predicate = NSPredicate.predicateWithFormat("(className == %@)", LayerType.Text);
+				var filteredLayers = filteredLayersInDocument(doc, predicate, function(layer) {
+					var attributes = layer.style().textStyle().attributes();
+					var hasSameAttributes = true;
+					for (var key in attributes) {
+						var value = attributes[value];
+						var referenceValue = attributesToFind[key];
+						
+						// TODO: FINISH THIS
+						
+						if (value == null) {
+							log(key + " is null for: " + layer.name());
+							log("Layer style: " + layer.style());
+						}
+						// if (value == null && referenceValue == null) {
+						// 	hasSameAttributes = true;
+						// } else if (value.isEqualTo(referenceValue)) {
+						// 	hasSameAttributes = true;
+						// } else {
+						// 	hasSameAttributes = false;
+						// 	break;
+						// }
+					}
+					return hasSameAttributes;
+				});
+			}
+		});
+	}
+}
+
+var selectLayersWithStyle = function(context) {
+	var sketch = context.api();
+	var doc = sketch.selectedDocument;
+	doc.sketchObject.showMessage("Not implemented yet!");
+}
+
+var replaceStyle = function(context) {
+	var sketch = context.api();
+	var doc = sketch.selectedDocument;
+	var textStyles = getAllSharedTextStyles(doc);
+	
+	showReplaceStyleDialog(doc, textStyles);
+}
+
+var mergeDuplicateStyles = function(context) {
+	var sketch = context.api();
+	var doc = sketch.selectedDocument;
+	doc.sketchObject.showMessage("Not implemented yet!");
+}
+
+var importStyles = function(context) {
+	var sketch = context.api();
+	var doc = sketch.selectedDocument;
+	
+	doc.sketchObject.showMessage("Not implemented yet!");
+	return; // TODO: Remove
+	
+	// Show a file picker dialog
+	var app = NSApp.delegate();
+	var openPanel = NSOpenPanel.openPanel();
+	openPanel.setAllowedFileTypes(["json"]);
+	openPanel.setCanChooseDirectories(true);
+	openPanel.setCanChooseFiles(true);
+	openPanel.setCanCreateDirectories(true);
+	openPanel.setTitle("Choose a file");
+	openPanel.setPrompt("Choose");
+	openPanel.runModal();
+
+	// Open the selected file (TODO: Handle errors)
+	var path = openPanel.URLs().firstObject().path();
+	var fileContents = NSString.stringWithContentsOfFile(path);
+	var stylesContents = JSON.parse(fileContents.toString());
+	var styles = stylesContents.styles;
+	var fonts = [];
+}
+
+var exportStyles = function(context) {
+	var sketch = context.api();
+	var doc = sketch.selectedDocument;
+	doc.sketchObject.showMessage("Not implemented yet!");
+}
