@@ -399,9 +399,7 @@ var importStyles = function(context) {
 	
 	if (styles.length > 0) {
 		var textStyles = doc.sketchObject.documentData().layerTextStyles();
-		for ()
-		var allTextStyles = getAllSharedTextStyles(doc);
-		
+		var styleReplacements = {};
 		for (var i = 0; i < styles.length; i++) {
 			var textStyleID = styles[i].sharedObjectID;
 			var name = styles[i].name;
@@ -455,11 +453,33 @@ var importStyles = function(context) {
 			if (sharedStyle == null) {
 				log("Unable to find text style by ID: " + name + "(" + textStyleID + ")");
 			} else {
+				var textStyleName = sharedStyle.name();
+				for (var j = 0; j < textStyles.numberOfSharedObjects(); j++) {
+					var object = textStyles.sharedObjectAtIndex(j);
+					var objectName = object.name();
+					var objectID = object.objectID();
+					if (!objectID.isEqualTo(textStyleID)) {
+						if (objectName.isEqualTo(textStyleName)) {
+							log("Duplicate found with name \"" + textStyleName + "\" (" + objectID + ")");
+							styleReplacements[objectID] = textStyleID;
+						}
+					}
+				}
+				
 				log("Updating text style by ID: " + name + "(" + textStyleID + ")");
 				updateSharedTextStyleUsingTextLayerAttributes(doc, textStyleID, sharedStyle, dummyTextLayer);
 				sharedStyle.name = name;
 			}
 		}
+		
+		// Merge duplicate styles
+		for (var duplicateID in styleReplacements) {
+			var canonicalID = styleReplacements[duplicateID];
+			var duplicateStyle = textStyles.sharedObjectWithID(duplicateID);
+			var canonicalStyle = textStyles.sharedObjectWithID(canonicalID);
+			replaceStyleWithStyle(doc, duplicateStyle, canonicalStyle);
+		}
+		
 		doc.sketchObject.showMessage("Imported " + styles.length + " styles!");
 	} else {
 		doc.sketchObject.showMessage("There are no styles defined in this file!");
