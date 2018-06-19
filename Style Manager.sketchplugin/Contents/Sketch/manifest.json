@@ -48,13 +48,13 @@
 		{
 			"script" : "script.cocoascript",
 			"handler" : "importStyles",
-			"name" : "[P1] Import Styles...",
+			"name" : "Import Styles...",
 			"identifier" : "importStyles",
 		},
 		{
 			"script" : "script.cocoascript",
 			"handler" : "exportStyles",
-			"name" : "[P2] Export Styles...",
+			"name" : "Export Styles...",
 			"identifier" : "exportStyles",
 		},
 	],

@@ -55,18 +55,13 @@ var getAllSharedTextStyles = function(doc) {
 };
 
 // Find other text layers with the same text style and update them to match this layer's attributes, preserving overrides
-var updateTextStyleUsingTextLayerAttributes = function(doc, textLayer) {
-	var textStyles = doc.sketchObject.documentData().layerTextStyles();
-	var newStyle = textLayer.style();
-	var textStyleID = newStyle.sharedObjectID();
-	var sharedStyle = textStyles.sharedObjectWithID(textStyleID);
-	
-	var textStyleID = textLayer.style().sharedObjectID();
+var updateSharedTextStyleUsingTextLayerAttributes = function(doc, textStyleID, sharedStyle, textLayer) {
 	var predicate = NSPredicate.predicateWithFormat("(style.sharedObjectID == %@)", textStyleID);
 	var filteredLayers = filteredLayersInDocument(doc, predicate, function(layer) {
 		return (layer != textLayer);
 	});
 	
+	var newStyle = textLayer.style();
 	for (var i = 0; i < filteredLayers.length; i++) {
 		var layerToUpdate = filteredLayers[i];
 		var style = layerToUpdate.style();
@@ -83,13 +78,23 @@ var updateTextStyleUsingTextLayerAttributes = function(doc, textLayer) {
 			var newValue = newAttributes[key];
 			var replacementValue = null;
 			
-			if (!value.isEqualTo(sharedValue)) {
+			var preserveOverrides = false;
+			if (value == null || sharedValue == null) {
+				if (value != sharedValue) {
+					preserveOverrides = true;
+				}
+			} else if (!value.isEqualTo(sharedValue)) {
+				preserveOverrides = true;
+			}
+			
+			if (preserveOverrides) {
 				// Preserve overrides
 				hasOverrides = true;
 				replacementValue = value;
 			} else {
 				replacementValue = newValue;
 			}
+			
 			replacementAttributes[key] = replacementValue;
 		}
 		
@@ -101,7 +106,8 @@ var updateTextStyleUsingTextLayerAttributes = function(doc, textLayer) {
 	}
 	
 	// Update the shared text style to match this layer's attributes
-	textStyles.updateValueOfSharedObject_byCopyingInstance(sharedStyle, newStyle);
+	sharedStyle.updateToMatch(newStyle);
+	// doc.reloadInspector(); // TODO: Remove?
 };
 
 var showReplaceStyleDialog = function(doc, textStyles) {
@@ -190,7 +196,7 @@ var replaceStyleWithStyle = function(doc, oldSharedStyle, newSharedStyle) {
 				hasOverrides = true;
 				overrideValue = value;
 				if (key == "NSFont") {
-					log(value);
+					// log(value); // TODO: Figure out how to support custom font (weight) overrides
 				}
 			} else {
 				overrideValue = newValue;
@@ -294,11 +300,11 @@ var updateStyle = function(context) {
 				if (textStyleID == null) {
 					doc.sketchObject.showMessage("You must select a text layer with a text style to use this command.");
 				} else {
-					var textStyle = textStyles.sharedObjectWithID(textStyleID);
-					var textStyleName = textStyle.name();
+					var sharedStyle = textStyles.sharedObjectWithID(textStyleID);
+					var sharedStyleName = sharedStyle.name();
 				
-					updateTextStyleUsingTextLayerAttributes(doc, textLayer);
-					doc.sketchObject.showMessage("Updated text style: " + textStyleName);
+					updateSharedTextStyleUsingTextLayerAttributes(doc, textStyleID, sharedStyle, textLayer);
+					doc.sketchObject.showMessage("Updated shared text style: " + sharedStyleName);
 				}
 			}
 		});
@@ -374,9 +380,6 @@ var importStyles = function(context) {
 	var sketch = context.api();
 	var doc = sketch.selectedDocument;
 	
-	doc.sketchObject.showMessage("Not implemented yet!");
-	return; // TODO: Remove
-	
 	// Show a file picker dialog
 	var app = NSApp.delegate();
 	var openPanel = NSOpenPanel.openPanel();
@@ -393,11 +396,176 @@ var importStyles = function(context) {
 	var fileContents = NSString.stringWithContentsOfFile(path);
 	var stylesContents = JSON.parse(fileContents.toString());
 	var styles = stylesContents.styles;
-	var fonts = [];
+	
+	if (styles.length > 0) {
+		var textStyles = doc.sketchObject.documentData().layerTextStyles();
+		for ()
+		var allTextStyles = getAllSharedTextStyles(doc);
+		
+		for (var i = 0; i < styles.length; i++) {
+			var textStyleID = styles[i].sharedObjectID;
+			var name = styles[i].name;
+			
+			var family = styles[i].font;
+			var size = styles[i].size;
+			var spacing = styles[i].spacing;
+			var textTransform = styles[i].textTransform;
+			var lineHeight = styles[i].lineHeight;
+			var paragraphSpacing = styles[i].paragraphSpacing;
+			var alignment = styles[i].alignment;
+			var verticalAlignment = styles[i].verticalAlignment;
+			var strikethrough = styles[i].strikethrough;
+			var underline = styles[i].underline;
+
+			var red = styles[i].color.red;
+			var green = styles[i].color.green;
+			var blue = styles[i].color.blue;
+			var alpha = styles[i].color.alpha;
+			var color = null;
+			if (isNaN(red) != true) {
+				var color = MSImmutableColor.alloc().initWithRed_green_blue_alpha(red, green, blue, alpha);
+			}
+
+			var rectTextFrame = NSMakeRect(0, 0, 250, 50);
+			var dummyTextLayer = MSTextLayer.alloc().initWithFrame(rectTextFrame);
+			dummyTextLayer.name = name;
+			dummyTextLayer.stringValue = name + " " + size + "px";
+			dummyTextLayer.fontPostscriptName = family;
+			dummyTextLayer.fontSize = size;
+			dummyTextLayer.setCharacterSpacing(spacing);
+			if (textTransform != null) {
+				dummyTextLayer.addAttribute_value("MSAttributedStringTextTransformAttribute", textTransform);
+			}
+			dummyTextLayer.setLineHeight(lineHeight);
+			// log(dummyTextLayer.paragraphStyle()); // TODO: paragraphSpacing
+			dummyTextLayer.textAlignment = alignment;
+			dummyTextLayer.setVerticalAlignment(verticalAlignment);
+			if (strikethrough != null) {
+				dummyTextLayer.addAttribute_value("NSStrikethrough", strikethrough);
+			}
+			if (underline != null) {
+				dummyTextLayer.addAttribute_value("NSUnderline", underline);
+			}
+			if (color != null) {
+				dummyTextLayer.addAttribute_value("MSAttributedStringColorAttribute", color);
+			}
+			var attributes = dummyTextLayer.style().textStyle().attributes();
+			
+			var sharedStyle = textStyles.sharedObjectWithID(textStyleID);
+			if (sharedStyle == null) {
+				log("Unable to find text style by ID: " + name + "(" + textStyleID + ")");
+			} else {
+				log("Updating text style by ID: " + name + "(" + textStyleID + ")");
+				updateSharedTextStyleUsingTextLayerAttributes(doc, textStyleID, sharedStyle, dummyTextLayer);
+				sharedStyle.name = name;
+			}
+		}
+		doc.sketchObject.showMessage("Imported " + styles.length + " styles!");
+	} else {
+		doc.sketchObject.showMessage("There are no styles defined in this file!");
+	}
 }
 
 var exportStyles = function(context) {
 	var sketch = context.api();
 	var doc = sketch.selectedDocument;
-	doc.sketchObject.showMessage("Not implemented yet!");
+	
+	var textStyleObjects = doc.sketchObject.documentData().layerTextStyles().objects();
+	var textStyles = [];
+	for (var i = 0; i < textStyleObjects.count(); i++) {
+		var style = textStyleObjects.objectAtIndex(i);
+		var textStyleID = style.style().sharedObjectID();
+		var attributes = style.style().textStyle().attributes();
+		var verticalAlignment = style.style().textStyle().verticalAlignment();
+		
+		textStyles.push({
+			"textStyleID": textStyleID,
+			"attributes": attributes,
+			"verticalAlignment": verticalAlignment,
+			"textStyle": style,
+			"name": style.name(),
+		});
+	}
+
+	if (textStyles.length > 0) {
+		var save = NSSavePanel.savePanel();
+		save.setNameFieldStringValue("Text Styles.json");
+		save.setAllowedFileTypes([@"json"]);
+		save.setAllowsOtherFileTypes(false);
+		save.setExtensionHidden(false);
+
+		if (save.runModal()) {
+			var styles = [];
+			for (var i = 0; i < textStyles.length; i++) {
+				var textStyle = textStyles[i];
+
+				var textStyleID = String(textStyle.textStyleID);
+				var name = String(textStyle.name);
+				
+				var family = String(textStyle.attributes.NSFont.fontDescriptor().objectForKey(NSFontNameAttribute));
+				var size = String(textStyle.attributes.NSFont.fontDescriptor().objectForKey(NSFontSizeAttribute)) * 1;
+				var spacing = String(textStyle.attributes.NSKern) * 1;
+				var verticalAlignment = textStyle.verticalAlignment;
+				var strikethrough = String(textStyle.attributes.NSStrikethrough) * 1;
+				var underline = String(textStyle.attributes.NSUnderline) * 1;
+
+				var alignment = null;
+				var lineHeight = null;
+				var paragraphSpacing = null;
+				var paragraphStyle = textStyle.attributes.NSParagraphStyle;
+				if (paragraphStyle != null) {
+					alignment = paragraphStyle.alignment();
+					lineHeight = paragraphStyle.maximumLineHeight();
+					paragraphSpacing = paragraphStyle.paragraphSpacing();
+				}
+
+				var textTransform = null;
+				var textTransformAttribute = textStyle.attributes.MSAttributedStringTextTransformAttribute;
+				if (textTransformAttribute != null) {
+					textTransform = String(textStyle.attributes.MSAttributedStringTextTransformAttribute) * 1;
+				} else {
+					textTransform = 0;
+				}
+				
+				var color = textStyle.attributes.MSAttributedStringColorAttribute;
+				if (color != null) {
+					var red = color.red();
+					var green = color.green();
+					var blue = color.blue();
+					var alpha = color.alpha();
+				}
+
+				styles.push({
+					sharedObjectID: textStyleID,
+					name: name,
+					font: family,
+					size: size,
+					color: {
+						red: red,
+						green: green,
+						blue: blue,
+						alpha: alpha,
+					},
+					alignment: alignment,
+					verticalAlignment: verticalAlignment,
+					spacing: spacing,
+					lineHeight: lineHeight,
+					paragraphSpacing: paragraphSpacing,
+					textTransform: textTransform,
+					strikethrough: strikethrough,
+					underline: underline,
+				});
+
+			};
+
+			var fileData = {"styles": styles};
+			var path = save.URL().path();
+			var file = NSString.stringWithString(JSON.stringify(fileData));
+			file.writeToFile_atomically_encoding_error(path, true, NSUTF8StringEncoding, null);
+			
+			doc.sketchObject.showMessage("Exported text styles to: " + path);
+		}
+	} else {
+		doc.sketchObject.showMessage("There are no text styles to export!");
+	}
 }
