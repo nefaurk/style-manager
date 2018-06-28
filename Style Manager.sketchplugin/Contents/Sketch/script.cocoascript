@@ -190,10 +190,18 @@ var replaceStyleWithStyle = function(doc, oldSharedStyle, newSharedStyle) {
 			var sharedValue = sharedAttributes[key];
 			var newValue = newAttributes[key];
 			var overrideValue = null;
+			var hasOverrides = false;
 			
-			if (!value.isEqualTo(sharedValue)) {
-				// Preserve overrides
+			if (value == null || sharedValue == null) {
+				if (value != sharedValue) {
+					hasOverrides = true;
+				}
+			} else if (!value.isEqualTo(sharedValue)) {
 				hasOverrides = true;
+			}
+			
+			if (hasOverrides) {
+				// Preserve overrides
 				overrideValue = value;
 				if (key == "NSFont") {
 					// log(value); // TODO: Figure out how to support custom font (weight) overrides
@@ -265,7 +273,16 @@ var inspectStyle = function(context) {
 						var value = textAttributes[key];
 						var sharedValue = sharedAttributes[key];
 						
-						if (!value.isEqualTo(sharedValue)) {
+						var hasDifferingAttributes = false;
+						if (value == null || sharedValue == null) {
+							if (value != sharedValue) {
+								hasDifferingAttributes = true;
+							}
+						} else if (!value.isEqualTo(sharedValue)) {
+							hasDifferingAttributes = true;
+						}
+						
+						if (hasDifferingAttributes) {
 							differingAttributes.push(key);
 						}
 					}
