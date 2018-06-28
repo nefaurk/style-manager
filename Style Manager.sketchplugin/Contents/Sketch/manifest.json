@@ -1,12 +1,13 @@
 {
 	"name" : "Style Manager",
-	"description" : "A collection of tools that help with text and layer style management",
+	"description" : "A collection of tools that help with style management",
 	"author" : "Nefaur Khandker",
 	"authorEmail" : "nefaurk@gmail.com",
 	"homepage": "http://github.com/nefaurk/style-manager",
 	"version" : "0.1",
 	"identifier" : "com.nefaurk.sketch-plugins.styleManager",
-	"compatibleVersion": "48.2",
+	"appcast": "https://nefaurk.github.io/sketch-plugins/appcast/style-manager.xml",
+	"compatibleVersion": "50.2",
 	"commands" : [
 		{
 			"script" : "script.cocoascript",
