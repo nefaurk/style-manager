@@ -13,7 +13,7 @@
 			"handler" : "inspectStyle",
 			"name" : "Inspect Style",
 			"identifier" : "inspectStyle",
-			"shortcut" : "ctrl i",
+			"shortcut" : "cmd alt ctrl i",
 		},
 		{
 			"script" : "script.cocoascript",
@@ -24,8 +24,9 @@
 		{
 			"script" : "script.cocoascript",
 			"handler" : "updateStyle",
-			"name" : "Update Style to Match Selected Layer and Preserve Overrides",
+			"name" : "Update Style to Match Selected Layer",
 			"identifier" : "updateStyle",
+			"shortcut" : "cmd alt ctrl u",
 		},
 		{
 			"script" : "script.cocoascript",
@@ -50,24 +51,23 @@
 			"handler" : "importStyles",
 			"name" : "Import Styles...",
 			"identifier" : "importStyles",
+			"shortcut" : "cmd alt ctrl o",
 		},
 		{
 			"script" : "script.cocoascript",
 			"handler" : "exportStyles",
 			"name" : "Export Styles...",
 			"identifier" : "exportStyles",
+			"shortcut" : "cmd alt ctrl e",
 		},
 	],
 	"menu": {
 		"items": [
 			"inspectStyle",
 			"updateStyle",
-			"selectLayersWithSameAttributes",
-			"selectLayersWithStyle",
-			"replaceStyle",
-			"mergeDuplicateStyles",
-			"importStyles",
+			"-",
 			"exportStyles",
+			"importStyles",
 		]
 	}
 }
